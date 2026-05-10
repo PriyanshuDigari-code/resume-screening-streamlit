@@ -7,588 +7,552 @@ Original file is located at
     https://colab.research.google.com/drive/1vyKg0H_ezHqHoh3hq3TxYtqWoxlkDEzG
 """
 
-!pip install streamlit pyngrok -q
+import streamlit as st
+import pandas as pd
+import numpy as np
+import re
+import io
+from typing import List, Dict
+from dataclasses import dataclass, field
 
-!pip install pdfplumber PyPDF2
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+from sentence_transformers import SentenceTransformer
+import plotly.graph_objects as go
 
-import pdfplumber
-import PyPDF2
+try:
+    import pdfplumber
+    PDF_SUPPORT = True
+except:
+    PDF_SUPPORT = False
 
-# Commented out IPython magic to ensure Python compatibility.
-# %%writefile app.py
-# import streamlit as st
-# import pandas as pd
-# import numpy as np
-# import re
-# import io
-# from typing import List, Dict
-# from dataclasses import dataclass, field
-# 
-# import nltk
-# from nltk.corpus import stopwords
-# from nltk.tokenize import word_tokenize
-# from nltk.stem import WordNetLemmatizer
-# from sklearn.feature_extraction.text import TfidfVectorizer
-# from sklearn.metrics.pairwise import cosine_similarity
-# from sentence_transformers import SentenceTransformer
-# import plotly.graph_objects as go
-# 
-# try:
-#     import pdfplumber
-#     PDF_SUPPORT = True
-# except:
-#     PDF_SUPPORT = False
-# 
-# try:
-#     import PyPDF2
-#     PYPDF2_SUPPORT = True
-# except:
-#     PYPDF2_SUPPORT = False
-# 
-# nltk.download('punkt', quiet=True)
-# nltk.download('stopwords', quiet=True)
-# nltk.download('wordnet', quiet=True)
-# nltk.download('punkt_tab', quiet=True)
-# 
-# SKILLS_DATABASE = {
-#     "programming_languages": [
-#         "python", "java", "javascript", "typescript", "c++", "c#", "c",
-#         "ruby", "go", "golang", "rust", "swift", "kotlin", "scala", "r",
-#         "php", "perl", "matlab", "julia", "dart", "lua", "haskell"
-#     ],
-#     "web_technologies": [
-#         "html", "html5", "css", "css3", "sass", "scss", "less",
-#         "react", "reactjs", "react.js", "angular", "vue", "vuejs",
-#         "next.js", "nextjs", "nuxt", "gatsby", "jquery", "bootstrap",
-#         "tailwind", "webpack", "vite", "node", "nodejs", "node.js",
-#         "express", "fastify", "nest", "nestjs", "graphql", "rest",
-#         "restful", "api", "websocket", "ajax", "json", "xml"
-#     ],
-#     "databases": [
-#         "sql", "mysql", "postgresql", "postgres", "oracle", "sql server",
-#         "sqlite", "mongodb", "redis", "cassandra", "dynamodb", "neo4j",
-#         "elasticsearch", "firebase", "supabase", "prisma"
-#     ],
-#     "cloud_devops": [
-#         "aws", "amazon web services", "ec2", "s3", "lambda", "rds",
-#         "azure", "gcp", "google cloud", "docker", "kubernetes", "k8s",
-#         "terraform", "ansible", "jenkins", "gitlab ci", "github actions",
-#         "circleci", "prometheus", "grafana", "nginx", "linux", "ci/cd",
-#         "devops", "microservices", "serverless"
-#     ],
-#     "data_science_ml": [
-#         "machine learning", "ml", "deep learning", "neural network",
-#         "tensorflow", "pytorch", "keras", "scikit-learn", "sklearn",
-#         "pandas", "numpy", "scipy", "matplotlib", "seaborn", "plotly",
-#         "nlp", "natural language processing", "computer vision", "opencv",
-#         "transformers", "bert", "gpt", "llm", "langchain", "huggingface",
-#         "spacy", "nltk", "regression", "classification", "clustering",
-#         "random forest", "xgboost", "cnn", "rnn", "lstm"
-#     ],
-#     "soft_skills": [
-#         "leadership", "communication", "teamwork", "problem solving",
-#         "analytical", "project management", "agile", "scrum", "kanban",
-#         "jira", "presentation", "mentoring", "time management"
-#     ]
-# }
-# 
-# def extract_text_from_pdf(pdf_file) -> str:
-#     """Extract text from PDF using pdfplumber or PyPDF2."""
-#     text = ""
-# 
-#     if PDF_SUPPORT:
-#         try:
-#             with pdfplumber.open(pdf_file) as pdf:
-#                 for page in pdf.pages:
-#                     page_text = page.extract_text()
-#                     if page_text:
-#                         text += page_text + "\n"
-#             if text.strip():
-#                 return text
-#         except Exception as e:
-#             pass
-# 
-#     if PYPDF2_SUPPORT:
-#         try:
-#             pdf_file.seek(0)
-#             reader = PyPDF2.PdfReader(pdf_file)
-#             for page in reader.pages:
-#                 page_text = page.extract_text()
-#                 if page_text:
-#                     text += page_text + "\n"
-#             return text
-#         except Exception as e:
-#             pass
-# 
-#     return text
-# 
-# class TextProcessor:
-#     def __init__(self):
-#         self.lemmatizer = WordNetLemmatizer()
-#         self.stop_words = set(stopwords.words('english'))
-# 
-#     def clean_text(self, text: str) -> str:
-#         if not text:
-#             return ""
-#         text = text.lower()
-#         text = re.sub(r'http\S+|www\S+', '', text)
-#         text = re.sub(r'\S+@\S+', '', text)
-#         text = re.sub(r'[^a-zA-Z0-9\s\.\+\#\-\_]', ' ', text)
-#         return ' '.join(text.split())
-# 
-#     def preprocess(self, text: str) -> str:
-#         text = self.clean_text(text)
-#         tokens = word_tokenize(text)
-#         return ' '.join([self.lemmatizer.lemmatize(t) for t in tokens if t not in self.stop_words and len(t) > 2])
-# 
-# class SkillExtractor:
-#     def __init__(self):
-#         self.skills_db = SKILLS_DATABASE
-# 
-#     def extract_skills(self, text: str) -> List[str]:
-#         text_lower = text.lower()
-#         found = []
-#         for skills in self.skills_db.values():
-#             for skill in skills:
-#                 if re.search(r'\b' + re.escape(skill) + r'\b', text_lower):
-#                     found.append(skill)
-#         return list(set(found))
-# 
-#     def calculate_match(self, resume_skills: List[str], jd_skills: List[str]) -> Dict:
-#         r_set, j_set = set(resume_skills), set(jd_skills)
-#         matched = r_set & j_set
-#         missing = j_set - r_set
-#         pct = (len(matched) / len(j_set) * 100) if j_set else 0
-#         return {'matched': list(matched), 'missing': list(missing), 'percentage': round(pct, 2)}
-# 
-# @st.cache_resource
-# def load_bert_model():
-#     return SentenceTransformer('all-MiniLM-L6-v2')
-# 
-# class SimilarityModels:
-#     def __init__(self):
-#         self.tfidf = TfidfVectorizer(max_features=5000, ngram_range=(1, 2), stop_words='english')
-#         self.bert = load_bert_model()
-# 
-#     def tfidf_similarity(self, texts: List[str], query: str) -> np.ndarray:
-#         all_texts = texts + [query]
-#         matrix = self.tfidf.fit_transform(all_texts)
-#         return cosine_similarity(matrix[-1], matrix[:-1])[0]
-# 
-#     def bert_similarity(self, texts: List[str], query: str) -> np.ndarray:
-#         text_emb = self.bert.encode(texts, show_progress_bar=False)
-#         query_emb = self.bert.encode([query], show_progress_bar=False)
-#         return cosine_similarity(query_emb, text_emb)[0]
-# 
-# @dataclass
-# class CandidateScore:
-#     name: str
-#     tfidf_score: float = 0.0
-#     bert_score: float = 0.0
-#     skill_score: float = 0.0
-#     experience_score: float = 0.0
-#     final_score: float = 0.0
-#     matched_skills: List[str] = field(default_factory=list)
-#     missing_skills: List[str] = field(default_factory=list)
-#     skill_match_pct: float = 0.0
-#     rank: int = 0
-#     resume_text: str = ""
-# 
-# class CandidateRanker:
-#     def __init__(self, w_tfidf=0.15, w_bert=0.35, w_skill=0.35, w_exp=0.15):
-#         self.weights = {'tfidf': w_tfidf, 'bert': w_bert, 'skill': w_skill, 'exp': w_exp}
-#         self.sim = SimilarityModels()
-#         self.skill_ext = SkillExtractor()
-#         self.text_proc = TextProcessor()
-# 
-#     def extract_experience(self, text: str) -> float:
-#         score = 0.0
-#         text_lower = text.lower()
-#         patterns = [r'(\d+)\+?\s*(?:years?|yrs?)(?:\s+of)?\s+(?:experience|exp)']
-#         max_years = 0
-#         for p in patterns:
-#             for m in re.findall(p, text_lower):
-#                 max_years = max(max_years, int(m))
-#         score += min(max_years / 15, 1.0) * 0.4
-# 
-#         for kw, w in {'senior': 0.15, 'lead': 0.18, 'principal': 0.20, 'staff': 0.18, 'architect': 0.20}.items():
-#             if kw in text_lower:
-#                 score += w
-#                 break
-# 
-#         achievements = len(re.findall(r'(?:increased|improved|reduced|saved|grew)\s+(?:by\s+)?(\d+)%', text_lower))
-#         score += min(achievements / 10, 1.0) * 0.2
-#         return min(score, 1.0)
-# 
-#     def rank(self, resumes: List[Dict], jd: str) -> List[CandidateScore]:
-#         jd_skills = self.skill_ext.extract_skills(jd)
-#         processed = [self.text_proc.preprocess(r['text']) for r in resumes]
-#         processed_jd = self.text_proc.preprocess(jd)
-# 
-#         tfidf_scores = self.sim.tfidf_similarity(processed, processed_jd)
-#         bert_scores = self.sim.bert_similarity(processed, processed_jd)
-# 
-#         candidates = []
-#         for i, r in enumerate(resumes):
-#             r_skills = self.skill_ext.extract_skills(r['text'])
-#             match = self.skill_ext.calculate_match(r_skills, jd_skills)
-#             exp = self.extract_experience(r['text'])
-# 
-#             c = CandidateScore(
-#                 name=r.get('name', f'Candidate {i+1}'),
-#                 tfidf_score=float(tfidf_scores[i]),
-#                 bert_score=float(bert_scores[i]),
-#                 skill_score=match['percentage'] / 100,
-#                 experience_score=exp,
-#                 matched_skills=match['matched'],
-#                 missing_skills=match['missing'],
-#                 skill_match_pct=match['percentage'],
-#                 resume_text=r['text'][:500] + "..." if len(r['text']) > 500 else r['text']
-#             )
-#             c.final_score = (self.weights['tfidf'] * c.tfidf_score + self.weights['bert'] * c.bert_score +
-#                             self.weights['skill'] * c.skill_score + self.weights['exp'] * c.experience_score)
-#             candidates.append(c)
-# 
-#         candidates.sort(key=lambda x: x.final_score, reverse=True)
-#         for i, c in enumerate(candidates):
-#             c.rank = i + 1
-#         return candidates
-# 
-# SAMPLE_JD = """Senior Full Stack Developer
-# 
-# We are looking for an experienced Full Stack Developer to join our team.
-# 
-# Requirements:
-# - 5+ years of experience in software development
-# - Strong proficiency in Python and JavaScript/TypeScript
-# - Experience with React.js or Vue.js for frontend development
-# - Backend experience with Node.js, Django, or FastAPI
-# - Database skills: PostgreSQL, MongoDB, Redis
-# - Cloud experience with AWS (EC2, S3, Lambda)
-# - Familiarity with Docker and Kubernetes
-# - Experience with CI/CD pipelines (GitHub Actions, Jenkins)
-# - Strong problem-solving and communication skills
-# - Experience with Agile/Scrum methodologies
-# 
-# Nice to have:
-# - Machine Learning experience with TensorFlow or PyTorch
-# - Experience with GraphQL
-# - Microservices architecture experience"""
-# 
-# SAMPLE_RESUMES = [
-#     {"name": "Alice Johnson", "text": """ALICE JOHNSON - Senior Software Engineer
-# 
-# SUMMARY: Experienced Full Stack Developer with 7+ years of experience building scalable web applications.
-# 
-# EXPERIENCE:
-# Senior Software Engineer | TechCorp Inc. | 2020-Present
-# - Led development of microservices architecture serving 1M+ users
-# - Increased application performance by 40% through optimization
-# - Mentored team of 5 junior developers
-# - Technologies: Python, Django, React.js, PostgreSQL, AWS, Docker, Kubernetes
-# 
-# Software Engineer | StartupXYZ | 2017-2020
-# - Built RESTful APIs handling 10K requests/minute
-# - Implemented CI/CD pipelines reducing deployment time by 60%
-# - Technologies: Node.js, Vue.js, MongoDB, Redis, GitHub Actions
-# 
-# SKILLS: Python, JavaScript, TypeScript, React.js, Vue.js, Django, FastAPI, Node.js, PostgreSQL, MongoDB, Redis, AWS, Docker, Kubernetes, Git, Jenkins, Agile, Scrum
-# 
-# EDUCATION: B.S. Computer Science | MIT | 2017"""},
-# 
-#     {"name": "Bob Smith", "text": """BOB SMITH - Full Stack Developer
-# 
-# ABOUT: Full Stack Developer with 4 years of experience in web development.
-# 
-# EXPERIENCE:
-# Full Stack Developer | WebAgency | 2021-Present
-# - Developed responsive web applications using React
-# - Built backend APIs with Node.js and Express
-# - Managed MySQL databases
-# 
-# Junior Developer | SmallTech | 2020-2021
-# - Assisted in frontend development with HTML, CSS, JavaScript
-# 
-# SKILLS: JavaScript, HTML, CSS, React.js, Node.js, Express, MySQL, MongoDB, Git, Basic AWS
-# 
-# EDUCATION: B.S. Information Technology | State University | 2020"""},
-# 
-#     {"name": "Carol Williams", "text": """CAROL WILLIAMS - Staff Engineer | Tech Lead
-# 
-# SUMMARY: Staff Engineer with 10+ years of experience in software development and machine learning.
-# 
-# EXPERIENCE:
-# Staff Engineer | BigTech Corp | 2019-Present
-# - Architected ML pipeline processing 50M records daily
-# - Led team of 12 engineers across 3 time zones
-# - Reduced infrastructure costs by $2M annually
-# - Technologies: Python, TensorFlow, PyTorch, Kubernetes, AWS, GCP
-# 
-# Senior Software Engineer | DataCo | 2015-2019
-# - Built real-time data processing systems using Apache Kafka
-# - Implemented recommendation engine increasing engagement by 35%
-# - Technologies: Python, Scala, Spark, PostgreSQL, Redis, Docker
-# 
-# SKILLS: Python, JavaScript, TypeScript, Scala, Go, TensorFlow, PyTorch, Django, FastAPI, Node.js, GraphQL, React.js, Vue.js, PostgreSQL, MongoDB, Redis, AWS, GCP, Kubernetes, Docker, Terraform
-# 
-# EDUCATION: M.S. Computer Science | Stanford | 2013"""},
-# 
-#     {"name": "David Brown", "text": """DAVID BROWN - Junior Developer
-# 
-# OBJECTIVE: Recent graduate seeking entry-level developer position.
-# 
-# EDUCATION: B.S. Computer Science | Community College | 2023
-# 
-# PROJECTS:
-# - E-commerce Website: Built online store using HTML, CSS, JavaScript, PHP
-# - Weather App: Created weather application using React
-# 
-# SKILLS: HTML, CSS, JavaScript, React (beginner), Python (basic), MySQL, Git"""},
-# 
-#     {"name": "Emma Davis", "text": """EMMA DAVIS - Senior Full Stack Engineer
-# 
-# SUMMARY: Senior Full Stack Engineer with 6 years of experience specializing in Python and JavaScript.
-# 
-# EXPERIENCE:
-# Senior Full Stack Engineer | FinTech Solutions | 2021-Present
-# - Led development of payment processing system handling $10M daily
-# - Implemented microservices using Python/FastAPI and Node.js
-# - Built React dashboard with real-time data visualization
-# - Technologies: Python, FastAPI, React, TypeScript, PostgreSQL, Redis, AWS, Docker
-# 
-# Full Stack Developer | E-commerce Platform | 2019-2021
-# - Developed inventory management system with Django REST APIs
-# - Implemented CI/CD using Jenkins and GitHub Actions
-# - Technologies: Python, Django, Vue.js, MongoDB, AWS
-# 
-# SKILLS: Python, JavaScript, TypeScript, React.js, Vue.js, Next.js, Django, FastAPI, Node.js, PostgreSQL, MongoDB, Redis, AWS, Docker, Kubernetes, Git, Jenkins, GitHub Actions, Jira, Scrum
-# 
-# EDUCATION: B.S. Software Engineering | Tech University | 2018"""}
-# ]
-# 
-# st.set_page_config(page_title="AI Resume Screening", page_icon="", layout="wide")
-# 
-# st.markdown("""
-# <style>
-#     .main-header {font-size: 2.5rem; font-weight: bold; margin-bottom: 1rem;}
-#     .sub-header {font-size: 1.2rem; color: #666; margin-bottom: 2rem;}
-#     .metric-card {background: #f8f9fa; padding: 1rem; border-radius: 8px; text-align: center;}
-#     .success-box {background: #d4edda; padding: 1rem; border-radius: 8px; border-left: 4px solid #28a745;}
-#     .warning-box {background: #fff3cd; padding: 1rem; border-radius: 8px; border-left: 4px solid #ffc107;}
-# </style>
-# """, unsafe_allow_html=True)
-# 
-# st.markdown('<p class="main-header">AI Resume Screening & Candidate Ranking</p>', unsafe_allow_html=True)
-# st.markdown('<p class="sub-header">Upload PDF resumes and job description to automatically rank candidates using AI</p>', unsafe_allow_html=True)
-# 
-# st.sidebar.header("Settings")
-# st.sidebar.markdown("---")
-# st.sidebar.subheader("Scoring Weights")
-# w_tfidf = st.sidebar.slider("TF-IDF (Keyword Match)", 0.0, 1.0, 0.15, 0.05)
-# w_bert = st.sidebar.slider("BERT (Semantic Match)", 0.0, 1.0, 0.35, 0.05)
-# w_skill = st.sidebar.slider("Skill Match", 0.0, 1.0, 0.35, 0.05)
-# w_exp = st.sidebar.slider("Experience Score", 0.0, 1.0, 0.15, 0.05)
-# 
-# total = w_tfidf + w_bert + w_skill + w_exp
-# if abs(total - 1.0) > 0.01:
-#     st.sidebar.warning(f"Weights sum to {total:.2f} (should be 1.0)")
-# else:
-#     st.sidebar.success(f"Weights sum to {total:.2f}")
-# 
-# st.sidebar.markdown("---")
-# st.sidebar.info("TF-IDF: Keyword matching\nBERT: Semantic understanding\nSkill: Technical skills match\nExperience: Years & seniority")
-# 
-# tab1, tab2 = st.tabs(["Upload Your Own Data", "Use Sample Data"])
-# 
-# with tab1:
-#     col1, col2 = st.columns(2)
-# 
-#     with col1:
-#         st.subheader("Job Description")
-#         jd_input = st.text_area(
-#             "Paste the job description here:",
-#             height=300,
-#             placeholder="Paste the complete job description including requirements, skills needed, experience level, etc."
-#         )
-# 
-#     with col2:
-#         st.subheader("Upload Resumes (PDF or TXT)")
-#         uploaded_files = st.file_uploader(
-#             "Upload one or more resume files",
-#             type=['pdf', 'txt'],
-#             accept_multiple_files=True,
-#             help="Supported formats: PDF, TXT. Upload multiple files to compare candidates."
-#         )
-# 
-#         if uploaded_files:
-#             st.success(f"Uploaded {len(uploaded_files)} file(s)")
-#             for f in uploaded_files:
-#                 st.write(f"- {f.name}")
-# 
-#         if not PDF_SUPPORT and not PYPDF2_SUPPORT:
-#             st.warning("PDF support not available. Please upload TXT files or install pdfplumber.")
-# 
-#     if st.button("Analyze Uploaded Resumes", type="primary", use_container_width=True):
-#         if not uploaded_files:
-#             st.error("Please upload at least one resume file.")
-#         elif not jd_input.strip():
-#             st.error("Please enter a job description.")
-#         else:
-#             resumes = []
-#             with st.spinner("Extracting text from resumes..."):
-#                 for f in uploaded_files:
-#                     if f.name.lower().endswith('.txt'):
-#                         text = f.read().decode('utf-8')
-#                     else:
-#                         pdf_bytes = io.BytesIO(f.read())
-#                         text = extract_text_from_pdf(pdf_bytes)
-# 
-#                     if text.strip():
-#                         name = f.name.replace('.pdf', '').replace('.txt', '').replace('_', ' ').replace('-', ' ')
-#                         resumes.append({'name': name, 'text': text})
-#                         st.write(f"Extracted: {name} ({len(text)} chars)")
-#                     else:
-#                         st.warning(f"Could not extract text from {f.name}")
-# 
-#             if resumes:
-#                 with st.spinner("Analyzing candidates with AI..."):
-#                     ranker = CandidateRanker(w_tfidf, w_bert, w_skill, w_exp)
-#                     candidates = ranker.rank(resumes, jd_input)
-# 
-#                 st.session_state['candidates'] = candidates
-#                 st.session_state['jd'] = jd_input
-#                 st.success(f"Analysis complete! Ranked {len(candidates)} candidates.")
-# 
-# with tab2:
-#     st.info("Click below to run analysis with 5 sample resumes and a Senior Full Stack Developer job description.")
-# 
-#     with st.expander("View Sample Job Description"):
-#         st.text(SAMPLE_JD)
-# 
-#     with st.expander("View Sample Resumes"):
-#         for r in SAMPLE_RESUMES:
-#             st.markdown(f"**{r['name']}**")
-#             st.text(r['text'][:300] + "...")
-#             st.markdown("---")
-# 
-#     if st.button("Run Analysis with Sample Data", type="primary", use_container_width=True):
-#         with st.spinner("Analyzing sample candidates with AI..."):
-#             ranker = CandidateRanker(w_tfidf, w_bert, w_skill, w_exp)
-#             candidates = ranker.rank(SAMPLE_RESUMES, SAMPLE_JD)
-# 
-#         st.session_state['candidates'] = candidates
-#         st.session_state['jd'] = SAMPLE_JD
-#         st.success(f"Analysis complete! Ranked {len(candidates)} candidates.")
-# 
-# if 'candidates' in st.session_state:
-#     candidates = st.session_state['candidates']
-# 
-#     st.markdown("---")
-#     st.header("Analysis Results")
-# 
-#     col1, col2, col3, col4 = st.columns(4)
-#     col1.metric("Total Candidates", len(candidates))
-#     col2.metric("Top Score", f"{candidates[0].final_score:.1%}")
-#     col3.metric("Avg Score", f"{np.mean([c.final_score for c in candidates]):.1%}")
-#     col4.metric("Top Candidate", candidates[0].name)
-# 
-#     st.subheader("Candidate Rankings")
-#     df = pd.DataFrame([{
-#         'Rank': c.rank,
-#         'Name': c.name,
-#         'Final Score': f"{c.final_score:.1%}",
-#         'Skill Match': f"{c.skill_match_pct:.1f}%",
-#         'TF-IDF': f"{c.tfidf_score:.1%}",
-#         'BERT': f"{c.bert_score:.1%}",
-#         'Experience': f"{c.experience_score:.1%}"
-#     } for c in candidates])
-#     st.dataframe(df, use_container_width=True, hide_index=True)
-# 
-#     col1, col2 = st.columns(2)
-# 
-#     with col1:
-#         st.subheader("Overall Rankings")
-#         fig1 = go.Figure(go.Bar(
-#             x=[c.final_score for c in sorted(candidates, key=lambda x: x.rank)],
-#             y=[c.name for c in sorted(candidates, key=lambda x: x.rank)],
-#             orientation='h',
-#             marker=dict(color=[c.final_score for c in sorted(candidates, key=lambda x: x.rank)], colorscale='Blues'),
-#             text=[f"#{c.rank} - {c.final_score:.1%}" for c in sorted(candidates, key=lambda x: x.rank)],
-#             textposition='outside'
-#         ))
-#         fig1.update_layout(height=400, xaxis_title='Score', yaxis_title='', margin=dict(l=0, r=0, t=30, b=0))
-#         st.plotly_chart(fig1, use_container_width=True)
-# 
-#     with col2:
-#         st.subheader("Score Breakdown")
-#         fig2 = go.Figure()
-#         colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12']
-#         labels = ['TF-IDF', 'BERT', 'Skills', 'Experience']
-#         for idx, (label, color) in enumerate(zip(labels, colors)):
-#             vals = {
-#                 'TF-IDF': [c.tfidf_score * w_tfidf for c in candidates],
-#                 'BERT': [c.bert_score * w_bert for c in candidates],
-#                 'Skills': [c.skill_score * w_skill for c in candidates],
-#                 'Experience': [c.experience_score * w_exp for c in candidates]
-#             }
-#             fig2.add_trace(go.Bar(name=label, x=[c.name for c in candidates], y=vals[label], marker_color=color))
-#         fig2.update_layout(barmode='stack', height=400, margin=dict(l=0, r=0, t=30, b=0))
-#         st.plotly_chart(fig2, use_container_width=True)
-# 
-#     st.subheader("Detailed Candidate Profiles")
-#     for c in candidates:
-#         with st.expander(f"#{c.rank} - {c.name} ({c.final_score:.1%})"):
-#             col1, col2, col3, col4 = st.columns(4)
-#             col1.metric("TF-IDF Score", f"{c.tfidf_score:.1%}")
-#             col2.metric("BERT Score", f"{c.bert_score:.1%}")
-#             col3.metric("Skill Match", f"{c.skill_match_pct:.1f}%")
-#             col4.metric("Experience", f"{c.experience_score:.1%}")
-# 
-#             col1, col2 = st.columns(2)
-#             with col1:
-#                 st.markdown("**Matched Skills:**")
-#                 if c.matched_skills:
-#                     st.success(", ".join(c.matched_skills))
-#                 else:
-#                     st.warning("No matched skills")
-# 
-#             with col2:
-#                 st.markdown("**Missing Skills:**")
-#                 if c.missing_skills:
-#                     st.error(", ".join(c.missing_skills))
-#                 else:
-#                     st.success("No missing skills!")
-# 
-#             st.markdown("**Resume Preview:**")
-#             st.text(c.resume_text)
-# 
-# st.markdown("---")
-# st.markdown("AI Resume Screening System | Built with Streamlit, BERT & TF-IDF")
+try:
+    import PyPDF2
+    PYPDF2_SUPPORT = True
+except:
+    PYPDF2_SUPPORT = False
 
-!pip install pyngrok -q
+nltk.download('punkt', quiet=True)
+nltk.download('stopwords', quiet=True)
+nltk.download('wordnet', quiet=True)
+nltk.download('punkt_tab', quiet=True)
 
-from pyngrok import ngrok
+SKILLS_DATABASE = {
+    "programming_languages": [
+        "python", "java", "javascript", "typescript", "c++", "c#", "c",
+        "ruby", "go", "golang", "rust", "swift", "kotlin", "scala", "r",
+        "php", "perl", "matlab", "julia", "dart", "lua", "haskell"
+    ],
+    "web_technologies": [
+        "html", "html5", "css", "css3", "sass", "scss", "less",
+        "react", "reactjs", "react.js", "angular", "vue", "vuejs",
+        "next.js", "nextjs", "nuxt", "gatsby", "jquery", "bootstrap",
+        "tailwind", "webpack", "vite", "node", "nodejs", "node.js",
+        "express", "fastify", "nest", "nestjs", "graphql", "rest",
+        "restful", "api", "websocket", "ajax", "json", "xml"
+    ],
+    "databases": [
+        "sql", "mysql", "postgresql", "postgres", "oracle", "sql server",
+        "sqlite", "mongodb", "redis", "cassandra", "dynamodb", "neo4j",
+        "elasticsearch", "firebase", "supabase", "prisma"
+    ],
+    "cloud_devops": [
+        "aws", "amazon web services", "ec2", "s3", "lambda", "rds",
+        "azure", "gcp", "google cloud", "docker", "kubernetes", "k8s",
+        "terraform", "ansible", "jenkins", "gitlab ci", "github actions",
+        "circleci", "prometheus", "grafana", "nginx", "linux", "ci/cd",
+        "devops", "microservices", "serverless"
+    ],
+    "data_science_ml": [
+        "machine learning", "ml", "deep learning", "neural network",
+        "tensorflow", "pytorch", "keras", "scikit-learn", "sklearn",
+        "pandas", "numpy", "scipy", "matplotlib", "seaborn", "plotly",
+        "nlp", "natural language processing", "computer vision", "opencv",
+        "transformers", "bert", "gpt", "llm", "langchain", "huggingface",
+        "spacy", "nltk", "regression", "classification", "clustering",
+        "random forest", "xgboost", "cnn", "rnn", "lstm"
+    ],
+    "soft_skills": [
+        "leadership", "communication", "teamwork", "problem solving",
+        "analytical", "project management", "agile", "scrum", "kanban",
+        "jira", "presentation", "mentoring", "time management"
+    ]
+}
 
-ngrok.set_auth_token("3CqAdIB0VycJKYtmh59slNWhzDJ_Z1iiUEV13jEdoKRC1uWN")
+def extract_text_from_pdf(pdf_file) -> str:
+    """Extract text from PDF using pdfplumber or PyPDF2."""
+    text = ""
 
-import subprocess
-process = subprocess.Popen(
-    ['streamlit', 'run', 'app.py', '--server.port', '8501', '--server.headless', 'true'],
-    stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE
-)
+    if PDF_SUPPORT:
+        try:
+            with pdfplumber.open(pdf_file) as pdf:
+                for page in pdf.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        text += page_text + "\n"
+            if text.strip():
+                return text
+        except Exception as e:
+            pass
 
-import time
-time.sleep(5)
+    if PYPDF2_SUPPORT:
+        try:
+            pdf_file.seek(0)
+            reader = PyPDF2.PdfReader(pdf_file)
+            for page in reader.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
+            return text
+        except Exception as e:
+            pass
 
-public_url = ngrok.connect(8501)
+    return text
 
-print("=" * 60)
-print("YOUR APP IS READY!")
-print("=" * 60)
-print(f"\nOpen this URL in your browser:\n")
-print(f"   {public_url}")
-print(f"\n" + "=" * 60)
-print("To stop: Runtime -> Interrupt execution")
-print("=" * 60)
+class TextProcessor:
+    def __init__(self):
+        self.lemmatizer = WordNetLemmatizer()
+        self.stop_words = set(stopwords.words('english'))
+
+    def clean_text(self, text: str) -> str:
+        if not text:
+            return ""
+        text = text.lower()
+        text = re.sub(r'http\S+|www\S+', '', text)
+        text = re.sub(r'\S+@\S+', '', text)
+        text = re.sub(r'[^a-zA-Z0-9\s\.\+\#\-\_]', ' ', text)
+        return ' '.join(text.split())
+
+    def preprocess(self, text: str) -> str:
+        text = self.clean_text(text)
+        tokens = word_tokenize(text)
+        return ' '.join([self.lemmatizer.lemmatize(t) for t in tokens if t not in self.stop_words and len(t) > 2])
+
+class SkillExtractor:
+    def __init__(self):
+        self.skills_db = SKILLS_DATABASE
+
+    def extract_skills(self, text: str) -> List[str]:
+        text_lower = text.lower()
+        found = []
+        for skills in self.skills_db.values():
+            for skill in skills:
+                if re.search(r'\b' + re.escape(skill) + r'\b', text_lower):
+                    found.append(skill)
+        return list(set(found))
+
+    def calculate_match(self, resume_skills: List[str], jd_skills: List[str]) -> Dict:
+        r_set, j_set = set(resume_skills), set(jd_skills)
+        matched = r_set & j_set
+        missing = j_set - r_set
+        pct = (len(matched) / len(j_set) * 100) if j_set else 0
+        return {'matched': list(matched), 'missing': list(missing), 'percentage': round(pct, 2)}
+
+@st.cache_resource
+def load_bert_model():
+    return SentenceTransformer('all-MiniLM-L6-v2')
+
+class SimilarityModels:
+    def __init__(self):
+        self.tfidf = TfidfVectorizer(max_features=5000, ngram_range=(1, 2), stop_words='english')
+        self.bert = load_bert_model()
+
+    def tfidf_similarity(self, texts: List[str], query: str) -> np.ndarray:
+        all_texts = texts + [query]
+        matrix = self.tfidf.fit_transform(all_texts)
+        return cosine_similarity(matrix[-1], matrix[:-1])[0]
+
+    def bert_similarity(self, texts: List[str], query: str) -> np.ndarray:
+        text_emb = self.bert.encode(texts, show_progress_bar=False)
+        query_emb = self.bert.encode([query], show_progress_bar=False)
+        return cosine_similarity(query_emb, text_emb)[0]
+
+@dataclass
+class CandidateScore:
+    name: str
+    tfidf_score: float = 0.0
+    bert_score: float = 0.0
+    skill_score: float = 0.0
+    experience_score: float = 0.0
+    final_score: float = 0.0
+    matched_skills: List[str] = field(default_factory=list)
+    missing_skills: List[str] = field(default_factory=list)
+    skill_match_pct: float = 0.0
+    rank: int = 0
+    resume_text: str = ""
+
+class CandidateRanker:
+    def __init__(self, w_tfidf=0.15, w_bert=0.35, w_skill=0.35, w_exp=0.15):
+        self.weights = {'tfidf': w_tfidf, 'bert': w_bert, 'skill': w_skill, 'exp': w_exp}
+        self.sim = SimilarityModels()
+        self.skill_ext = SkillExtractor()
+        self.text_proc = TextProcessor()
+
+    def extract_experience(self, text: str) -> float:
+        score = 0.0
+        text_lower = text.lower()
+        patterns = [r'(\d+)\+?\s*(?:years?|yrs?)(?:\s+of)?\s+(?:experience|exp)']
+        max_years = 0
+        for p in patterns:
+            for m in re.findall(p, text_lower):
+                max_years = max(max_years, int(m))
+        score += min(max_years / 15, 1.0) * 0.4
+
+        for kw, w in {'senior': 0.15, 'lead': 0.18, 'principal': 0.20, 'staff': 0.18, 'architect': 0.20}.items():
+            if kw in text_lower:
+                score += w
+                break
+
+        achievements = len(re.findall(r'(?:increased|improved|reduced|saved|grew)\s+(?:by\s+)?(\d+)%', text_lower))
+        score += min(achievements / 10, 1.0) * 0.2
+        return min(score, 1.0)
+
+    def rank(self, resumes: List[Dict], jd: str) -> List[CandidateScore]:
+        jd_skills = self.skill_ext.extract_skills(jd)
+        processed = [self.text_proc.preprocess(r['text']) for r in resumes]
+        processed_jd = self.text_proc.preprocess(jd)
+
+        tfidf_scores = self.sim.tfidf_similarity(processed, processed_jd)
+        bert_scores = self.sim.bert_similarity(processed, processed_jd)
+
+        candidates = []
+        for i, r in enumerate(resumes):
+            r_skills = self.skill_ext.extract_skills(r['text'])
+            match = self.skill_ext.calculate_match(r_skills, jd_skills)
+            exp = self.extract_experience(r['text'])
+
+            c = CandidateScore(
+                name=r.get('name', f'Candidate {i+1}'),
+                tfidf_score=float(tfidf_scores[i]),
+                bert_score=float(bert_scores[i]),
+                skill_score=match['percentage'] / 100,
+                experience_score=exp,
+                matched_skills=match['matched'],
+                missing_skills=match['missing'],
+                skill_match_pct=match['percentage'],
+                resume_text=r['text'][:500] + "..." if len(r['text']) > 500 else r['text']
+            )
+            c.final_score = (self.weights['tfidf'] * c.tfidf_score + self.weights['bert'] * c.bert_score +
+                            self.weights['skill'] * c.skill_score + self.weights['exp'] * c.experience_score)
+            candidates.append(c)
+
+        candidates.sort(key=lambda x: x.final_score, reverse=True)
+        for i, c in enumerate(candidates):
+            c.rank = i + 1
+        return candidates
+
+SAMPLE_JD = """Senior Full Stack Developer
+
+We are looking for an experienced Full Stack Developer to join our team.
+
+Requirements:
+- 5+ years of experience in software development
+- Strong proficiency in Python and JavaScript/TypeScript
+- Experience with React.js or Vue.js for frontend development
+- Backend experience with Node.js, Django, or FastAPI
+- Database skills: PostgreSQL, MongoDB, Redis
+- Cloud experience with AWS (EC2, S3, Lambda)
+- Familiarity with Docker and Kubernetes
+- Experience with CI/CD pipelines (GitHub Actions, Jenkins)
+- Strong problem-solving and communication skills
+- Experience with Agile/Scrum methodologies
+
+Nice to have:
+- Machine Learning experience with TensorFlow or PyTorch
+- Experience with GraphQL
+- Microservices architecture experience"""
+
+SAMPLE_RESUMES = [
+    {"name": "Alice Johnson", "text": """ALICE JOHNSON - Senior Software Engineer
+
+SUMMARY: Experienced Full Stack Developer with 7+ years of experience building scalable web applications.
+
+EXPERIENCE:
+Senior Software Engineer | TechCorp Inc. | 2020-Present
+- Led development of microservices architecture serving 1M+ users
+- Increased application performance by 40% through optimization
+- Mentored team of 5 junior developers
+- Technologies: Python, Django, React.js, PostgreSQL, AWS, Docker, Kubernetes
+
+Software Engineer | StartupXYZ | 2017-2020
+- Built RESTful APIs handling 10K requests/minute
+- Implemented CI/CD pipelines reducing deployment time by 60%
+- Technologies: Node.js, Vue.js, MongoDB, Redis, GitHub Actions
+
+SKILLS: Python, JavaScript, TypeScript, React.js, Vue.js, Django, FastAPI, Node.js, PostgreSQL, MongoDB, Redis, AWS, Docker, Kubernetes, Git, Jenkins, Agile, Scrum
+
+EDUCATION: B.S. Computer Science | MIT | 2017"""},
+
+    {"name": "Bob Smith", "text": """BOB SMITH - Full Stack Developer
+
+ABOUT: Full Stack Developer with 4 years of experience in web development.
+
+EXPERIENCE:
+Full Stack Developer | WebAgency | 2021-Present
+- Developed responsive web applications using React
+- Built backend APIs with Node.js and Express
+- Managed MySQL databases
+
+Junior Developer | SmallTech | 2020-2021
+- Assisted in frontend development with HTML, CSS, JavaScript
+
+SKILLS: JavaScript, HTML, CSS, React.js, Node.js, Express, MySQL, MongoDB, Git, Basic AWS
+
+EDUCATION: B.S. Information Technology | State University | 2020"""},
+
+    {"name": "Carol Williams", "text": """CAROL WILLIAMS - Staff Engineer | Tech Lead
+
+SUMMARY: Staff Engineer with 10+ years of experience in software development and machine learning.
+
+EXPERIENCE:
+Staff Engineer | BigTech Corp | 2019-Present
+- Architected ML pipeline processing 50M records daily
+- Led team of 12 engineers across 3 time zones
+- Reduced infrastructure costs by $2M annually
+- Technologies: Python, TensorFlow, PyTorch, Kubernetes, AWS, GCP
+
+Senior Software Engineer | DataCo | 2015-2019
+- Built real-time data processing systems using Apache Kafka
+- Implemented recommendation engine increasing engagement by 35%
+- Technologies: Python, Scala, Spark, PostgreSQL, Redis, Docker
+
+SKILLS: Python, JavaScript, TypeScript, Scala, Go, TensorFlow, PyTorch, Django, FastAPI, Node.js, GraphQL, React.js, Vue.js, PostgreSQL, MongoDB, Redis, AWS, GCP, Kubernetes, Docker, Terraform
+
+EDUCATION: M.S. Computer Science | Stanford | 2013"""},
+
+    {"name": "David Brown", "text": """DAVID BROWN - Junior Developer
+
+OBJECTIVE: Recent graduate seeking entry-level developer position.
+
+EDUCATION: B.S. Computer Science | Community College | 2023
+
+PROJECTS:
+- E-commerce Website: Built online store using HTML, CSS, JavaScript, PHP
+- Weather App: Created weather application using React
+
+SKILLS: HTML, CSS, JavaScript, React (beginner), Python (basic), MySQL, Git"""},
+
+    {"name": "Emma Davis", "text": """EMMA DAVIS - Senior Full Stack Engineer
+
+SUMMARY: Senior Full Stack Engineer with 6 years of experience specializing in Python and JavaScript.
+
+EXPERIENCE:
+Senior Full Stack Engineer | FinTech Solutions | 2021-Present
+- Led development of payment processing system handling $10M daily
+- Implemented microservices using Python/FastAPI and Node.js
+- Built React dashboard with real-time data visualization
+- Technologies: Python, FastAPI, React, TypeScript, PostgreSQL, Redis, AWS, Docker
+
+Full Stack Developer | E-commerce Platform | 2019-2021
+- Developed inventory management system with Django REST APIs
+- Implemented CI/CD using Jenkins and GitHub Actions
+- Technologies: Python, Django, Vue.js, MongoDB, AWS
+
+SKILLS: Python, JavaScript, TypeScript, React.js, Vue.js, Next.js, Django, FastAPI, Node.js, PostgreSQL, MongoDB, Redis, AWS, Docker, Kubernetes, Git, Jenkins, GitHub Actions, Jira, Scrum
+
+EDUCATION: B.S. Software Engineering | Tech University | 2018"""}
+]
+
+st.set_page_config(page_title="AI Resume Screening", page_icon="", layout="wide")
+
+st.markdown("""
+<style>
+    .main-header {font-size: 2.5rem; font-weight: bold; margin-bottom: 1rem;}
+    .sub-header {font-size: 1.2rem; color: #666; margin-bottom: 2rem;}
+    .metric-card {background: #f8f9fa; padding: 1rem; border-radius: 8px; text-align: center;}
+    .success-box {background: #d4edda; padding: 1rem; border-radius: 8px; border-left: 4px solid #28a745;}
+    .warning-box {background: #fff3cd; padding: 1rem; border-radius: 8px; border-left: 4px solid #ffc107;}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('<p class="main-header">AI Resume Screening & Candidate Ranking</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-header">Upload PDF resumes and job description to automatically rank candidates using AI</p>', unsafe_allow_html=True)
+
+st.sidebar.header("Settings")
+st.sidebar.markdown("---")
+st.sidebar.subheader("Scoring Weights")
+w_tfidf = st.sidebar.slider("TF-IDF (Keyword Match)", 0.0, 1.0, 0.15, 0.05)
+w_bert = st.sidebar.slider("BERT (Semantic Match)", 0.0, 1.0, 0.35, 0.05)
+w_skill = st.sidebar.slider("Skill Match", 0.0, 1.0, 0.35, 0.05)
+w_exp = st.sidebar.slider("Experience Score", 0.0, 1.0, 0.15, 0.05)
+
+total = w_tfidf + w_bert + w_skill + w_exp
+if abs(total - 1.0) > 0.01:
+    st.sidebar.warning(f"Weights sum to {total:.2f} (should be 1.0)")
+else:
+    st.sidebar.success(f"Weights sum to {total:.2f}")
+
+st.sidebar.markdown("---")
+st.sidebar.info("TF-IDF: Keyword matching\nBERT: Semantic understanding\nSkill: Technical skills match\nExperience: Years & seniority")
+
+tab1, tab2 = st.tabs(["Upload Your Own Data", "Use Sample Data"])
+
+with tab1:
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Job Description")
+        jd_input = st.text_area(
+            "Paste the job description here:",
+            height=300,
+            placeholder="Paste the complete job description including requirements, skills needed, experience level, etc."
+        )
+
+    with col2:
+        st.subheader("Upload Resumes (PDF or TXT)")
+        uploaded_files = st.file_uploader(
+            "Upload one or more resume files",
+            type=['pdf', 'txt'],
+            accept_multiple_files=True,
+            help="Supported formats: PDF, TXT. Upload multiple files to compare candidates."
+        )
+
+        if uploaded_files:
+            st.success(f"Uploaded {len(uploaded_files)} file(s)")
+            for f in uploaded_files:
+                st.write(f"- {f.name}")
+
+        if not PDF_SUPPORT and not PYPDF2_SUPPORT:
+            st.warning("PDF support not available. Please upload TXT files or install pdfplumber.")
+
+    if st.button("Analyze Uploaded Resumes", type="primary", use_container_width=True):
+        if not uploaded_files:
+            st.error("Please upload at least one resume file.")
+        elif not jd_input.strip():
+            st.error("Please enter a job description.")
+        else:
+            resumes = []
+            with st.spinner("Extracting text from resumes..."):
+                for f in uploaded_files:
+                    if f.name.lower().endswith('.txt'):
+                        text = f.read().decode('utf-8')
+                    else:
+                        pdf_bytes = io.BytesIO(f.read())
+                        text = extract_text_from_pdf(pdf_bytes)
+
+                    if text.strip():
+                        name = f.name.replace('.pdf', '').replace('.txt', '').replace('_', ' ').replace('-', ' ')
+                        resumes.append({'name': name, 'text': text})
+                        st.write(f"Extracted: {name} ({len(text)} chars)")
+                    else:
+                        st.warning(f"Could not extract text from {f.name}")
+
+            if resumes:
+                with st.spinner("Analyzing candidates with AI..."):
+                    ranker = CandidateRanker(w_tfidf, w_bert, w_skill, w_exp)
+                    candidates = ranker.rank(resumes, jd_input)
+
+                st.session_state['candidates'] = candidates
+                st.session_state['jd'] = jd_input
+                st.success(f"Analysis complete! Ranked {len(candidates)} candidates.")
+
+with tab2:
+    st.info("Click below to run analysis with 5 sample resumes and a Senior Full Stack Developer job description.")
+
+    with st.expander("View Sample Job Description"):
+        st.text(SAMPLE_JD)
+
+    with st.expander("View Sample Resumes"):
+        for r in SAMPLE_RESUMES:
+            st.markdown(f"**{r['name']}**")
+            st.text(r['text'][:300] + "...")
+            st.markdown("---")
+
+    if st.button("Run Analysis with Sample Data", type="primary", use_container_width=True):
+        with st.spinner("Analyzing sample candidates with AI..."):
+            ranker = CandidateRanker(w_tfidf, w_bert, w_skill, w_exp)
+            candidates = ranker.rank(SAMPLE_RESUMES, SAMPLE_JD)
+
+        st.session_state['candidates'] = candidates
+        st.session_state['jd'] = SAMPLE_JD
+        st.success(f"Analysis complete! Ranked {len(candidates)} candidates.")
+
+if 'candidates' in st.session_state:
+    candidates = st.session_state['candidates']
+
+    st.markdown("---")
+    st.header("Analysis Results")
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Total Candidates", len(candidates))
+    col2.metric("Top Score", f"{candidates[0].final_score:.1%}")
+    col3.metric("Avg Score", f"{np.mean([c.final_score for c in candidates]):.1%}")
+    col4.metric("Top Candidate", candidates[0].name)
+
+    st.subheader("Candidate Rankings")
+    df = pd.DataFrame([{
+        'Rank': c.rank,
+        'Name': c.name,
+        'Final Score': f"{c.final_score:.1%}",
+        'Skill Match': f"{c.skill_match_pct:.1f}%",
+        'TF-IDF': f"{c.tfidf_score:.1%}",
+        'BERT': f"{c.bert_score:.1%}",
+        'Experience': f"{c.experience_score:.1%}"
+    } for c in candidates])
+    st.dataframe(df, use_container_width=True, hide_index=True)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Overall Rankings")
+        fig1 = go.Figure(go.Bar(
+            x=[c.final_score for c in sorted(candidates, key=lambda x: x.rank)],
+            y=[c.name for c in sorted(candidates, key=lambda x: x.rank)],
+            orientation='h',
+            marker=dict(color=[c.final_score for c in sorted(candidates, key=lambda x: x.rank)], colorscale='Blues'),
+            text=[f"#{c.rank} - {c.final_score:.1%}" for c in sorted(candidates, key=lambda x: x.rank)],
+            textposition='outside'
+        ))
+        fig1.update_layout(height=400, xaxis_title='Score', yaxis_title='', margin=dict(l=0, r=0, t=30, b=0))
+        st.plotly_chart(fig1, use_container_width=True)
+
+    with col2:
+        st.subheader("Score Breakdown")
+        fig2 = go.Figure()
+        colors = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12']
+        labels = ['TF-IDF', 'BERT', 'Skills', 'Experience']
+        for idx, (label, color) in enumerate(zip(labels, colors)):
+            vals = {
+                'TF-IDF': [c.tfidf_score * w_tfidf for c in candidates],
+                'BERT': [c.bert_score * w_bert for c in candidates],
+                'Skills': [c.skill_score * w_skill for c in candidates],
+                'Experience': [c.experience_score * w_exp for c in candidates]
+            }
+            fig2.add_trace(go.Bar(name=label, x=[c.name for c in candidates], y=vals[label], marker_color=color))
+        fig2.update_layout(barmode='stack', height=400, margin=dict(l=0, r=0, t=30, b=0))
+        st.plotly_chart(fig2, use_container_width=True)
+
+    st.subheader("Detailed Candidate Profiles")
+    for c in candidates:
+        with st.expander(f"#{c.rank} - {c.name} ({c.final_score:.1%})"):
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("TF-IDF Score", f"{c.tfidf_score:.1%}")
+            col2.metric("BERT Score", f"{c.bert_score:.1%}")
+            col3.metric("Skill Match", f"{c.skill_match_pct:.1f}%")
+            col4.metric("Experience", f"{c.experience_score:.1%}")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**Matched Skills:**")
+                if c.matched_skills:
+                    st.success(", ".join(c.matched_skills))
+                else:
+                    st.warning("No matched skills")
+
+            with col2:
+                st.markdown("**Missing Skills:**")
+                if c.missing_skills:
+                    st.error(", ".join(c.missing_skills))
+                else:
+                    st.success("No missing skills!")
+
+            st.markdown("**Resume Preview:**")
+            st.text(c.resume_text)
+
+st.markdown("---")
+st.markdown("AI Resume Screening System | Built with Streamlit, BERT & TF-IDF")
 
