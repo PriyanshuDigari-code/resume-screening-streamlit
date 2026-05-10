@@ -6,12 +6,4 @@ scikit-learn
 sentence-transformers
 plotly
 pdfplumber
-PyPDF2streamlit
-nltk
-numpy
-pandas
-scikit-learn
-sentence-transformers
-plotly
-pdfplumber
 PyPDF2
