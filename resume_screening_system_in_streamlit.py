@@ -36,10 +36,16 @@ try:
 except:
     PYPDF2_SUPPORT = False
 
-nltk.download('punkt', quiet=True)
-nltk.download('stopwords', quiet=True)
-nltk.download('wordnet', quiet=True)
-nltk.download('punkt_tab', quiet=True)
+
+def safe_nltk_download():
+    resources = ['punkt', 'stopwords', 'wordnet']
+    for r in resources:
+        try:
+            nltk.data.find(f'tokenizers/{r}')
+        except:
+            nltk.download(r)
+
+safe_nltk_download()
 
 SKILLS_DATABASE = {
     "programming_languages": [
